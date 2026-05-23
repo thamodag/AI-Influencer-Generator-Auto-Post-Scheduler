@@ -1,0 +1,6 @@
+{
+  "name": "AI Influencer Generator & Auto Post Scheduler",
+  "description": "Create AI influencer personas with physical identity consistency, generate photos, captions, and automatically schedule/publish social media posts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
