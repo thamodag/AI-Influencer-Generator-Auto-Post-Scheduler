@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AIModel, GeneratedPost, FacebookPage, FlowProject, FlowAsset } from "../types";
+import GoogleConnectButton from "./GoogleConnectButton";
 import { 
   Sparkles, 
   Tv, 
@@ -211,49 +212,33 @@ export default function GeneratorView({
     }
   }, [terminalLogs]);
 
-  // Initializing oauth workflow with fallback button trigger
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // Initializing oauth workflow with real popup trigger
   const handleConnectGoogle = async () => {
-    addLog("Launching Google OAuth authentication popup window...");
+    setIsConnecting(true);
+    addLog("Initializing secure handshake with Google OAuth systems...", "info");
     try {
       const response = await fetch('/api/auth/url');
       if (response.ok) {
         const { url } = await response.json();
+        addLog("Google authorization URL compiled successfully. Launching popup...", "info");
         const popup = window.open(url, 'google_oauth_popup', 'width=600,height=700');
         if (!popup) {
-          addLog("Browser popup blocker detected. Redirecting to quick fallback login.", "warning");
-          await handleConnectGoogleInstant();
+          addLog("Browser popup blocker detected. Please authorize popups for this portal.", "error");
         }
       } else {
-        await handleConnectGoogleInstant();
+        addLog("Authorization server returned an error registering OAuth details.", "error");
       }
-    } catch (e) {
-      await handleConnectGoogleInstant();
+    } catch (err) {
+      addLog(`Failed to communicate with credentials gateway: ${err}`, "error");
+    } finally {
+      setIsConnecting(false);
     }
   };
 
-  const handleConnectGoogleInstant = async () => {
-    addLog("Calling fast Google Flow Account API connector...");
-    try {
-      const res = await fetch("/api/google/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: "roshanthamoda@gmail.com",
-          name: "Roshantha Moda",
-          avatar_url: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200"
-        })
-      });
-      const d = await res.json();
-      if (d.success) {
-        setGoogleSession(d.session);
-        addLog(`Connected with Google Account: ${d.session.email} successfully!`, "success");
-        fetchFlowProjects();
-      }
-    } catch {}
-  };
-
   const handleDisconnectGoogle = async () => {
-    addLog("Cleaning active credentials session...");
+    addLog("Terminating active Google credentials session...", "warning");
     try {
       const res = await fetch("/api/google/disconnect", { method: "POST" });
       const d = await res.json();
@@ -261,9 +246,11 @@ export default function GeneratorView({
         setGoogleSession(d.session);
         setSelectedProjectId("");
         setProjectAssets([]);
-        addLog("Google session disconnected safely.", "warning");
+        addLog("Google OAuth credentials session terminated successfully.", "success");
       }
-    } catch {}
+    } catch (err) {
+      addLog(`Error during logout dispatcher command: ${err}`, "error");
+    }
   };
 
   // Create a new Flow Project Workspace inside Models Studio structure
@@ -468,46 +455,13 @@ export default function GeneratorView({
     <div id="flow-generator-page" className="flex flex-col h-full text-slate-100">
       
       {/* Top Banner indicating Google account OAuth state */}
-      <div id="google-auth-status-bar" className="mb-6 p-4 rounded-xl border transition-all duration-300 bg-zinc-950/40 border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-600/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400">
-            <FolderOpen size={20} />
-          </div>
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              Google Account Connection Status
-              <span className={`inline-block w-2 h-2 rounded-full ${googleSession.connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
-            </div>
-            {googleSession.connected ? (
-              <p className="text-sm text-slate-300">
-                Connected with <span className="font-semibold text-white">{googleSession.email}</span> (active since {new Date(googleSession.connected_at).toLocaleString()})
-              </p>
-            ) : (
-              <p className="text-sm text-yellow-500/90 flex items-center gap-1.5 font-medium">
-                <AlertCircle size={14} /> Account offline. Connect Google Account to pull cloud Flow projects mapping character consistency.
-              </p>
-            )}
-          </div>
-        </div>
-        <div>
-          {googleSession.connected ? (
-            <button 
-              id="btn-disconnect-google"
-              onClick={handleDisconnectGoogle}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700/80 hover:text-rose-400 text-slate-300 text-xs px-4 py-2 rounded-lg transition-all font-semibold border border-zinc-700/50"
-            >
-              <LogOut size={13} /> Disconnect Account
-            </button>
-          ) : (
-            <button 
-              id="btn-connect-google"
-              onClick={handleConnectGoogle}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4  py-2 rounded-lg transition-all font-semibold shadow-lg shadow-indigo-600/15"
-            >
-              <ExternalLink size={13} /> Connect Google Account
-            </button>
-          )}
-        </div>
+      <div className="mb-6">
+        <GoogleConnectButton 
+          session={googleSession}
+          onConnect={handleConnectGoogle}
+          onDisconnect={handleDisconnectGoogle}
+          isConnecting={isConnecting}
+        />
       </div>
 
       {/* Main 3-Column Studio Grid */}
@@ -555,8 +509,8 @@ export default function GeneratorView({
                   </div>
                 )
               ) : (
-                <div className="p-3 bg-zinc-900/40 border border-dashed border-zinc-800 rounded-lg text-slate-500 text-center text-[11px] italic">
-                  Offline. Please link Google Account above.
+                <div className="p-3 bg-zinc-900/40 border border-dashed border-rose-950/40 rounded-lg text-rose-450 text-center text-[11px] font-medium">
+                  Google Account Connection Required
                 </div>
               )}
             </div>

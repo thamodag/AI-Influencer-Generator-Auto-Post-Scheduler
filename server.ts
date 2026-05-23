@@ -602,12 +602,64 @@ app.get("/api/auth/url", (req, res) => {
 });
 
 app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
+  const { code } = req.query;
   const db = await loadDB();
+  
+  let email = db.user.email || "roshanthamoda@gmail.com";
+  let name = db.user.name || "Roshantha Moda";
+  let avatar_url = db.user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200&h=200";
+
+  if (code) {
+    try {
+      const redirectUri = `${req.protocol}://${req.get("host")}/auth/callback`;
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+      if (clientId && clientSecret) {
+        // Exchange code for tokens
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            code: code as string,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: redirectUri,
+            grant_type: "authorization_code",
+          }).toString(),
+        });
+
+        if (tokenResponse.ok) {
+          const tokens = await tokenResponse.json();
+          const accessToken = tokens.access_token;
+          
+          // Fetch user profile from google userinfo endpoint
+          const userResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+
+          if (userResponse.ok) {
+            const profile = await userResponse.json();
+            email = profile.email || email;
+            name = profile.name || name;
+            avatar_url = profile.picture || avatar_url;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error exchanging Google OAuth code:", err);
+    }
+  }
+
   db.google_session = {
     connected: true,
-    email: db.user.email,
-    name: db.user.name,
-    avatar_url: db.user.avatar_url,
+    email,
+    name,
+    avatar_url,
     connected_at: new Date().toISOString()
   };
   await saveDB(db);
@@ -615,14 +667,21 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   res.send(`
     <html>
       <body style="font-family: sans-serif; background: #09090b; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-        <div style="text-align: center; border: 1px solid rgba(255,255,255,0.1); padding: 40px; border-radius: 12px; background: #0d0d0f;">
-          <h2 style="color: #4f46e5; margin-bottom: 8px;">Authentication Successful</h2>
-          <p style="color: #94a3b8; font-size: 14px;">Connected with Google Flow Engine context safely.</p>
-          <p style="color: #64748b; font-size: 12px; margin-top: 24px;">This window will close automatically... If not, you may close it now.</p>
+        <div style="text-align: center; border: 1px solid rgba(255,255,255,0.1); padding: 40px; border-radius: 12px; background: #0d0d0f; max-width: 450px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
+          <div style="width: 48px; height: 48px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <svg style="width: 24px; height: 24px; color: #6366f1;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 style="color: #fff; font-size: 20px; font-weight: 600; margin: 0 0 8px 0; letter-spacing: -0.025em;">Authentication Successful</h2>
+          <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 24px 0;">Connected your Google account <span style="color: #6366f1; font-weight: 500;">${email}</span> with the AI Influencer OS securely.</p>
+          <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px; color: #64748b; font-size: 12px;">
+            This window will close automatically... If not, close it now.
+          </div>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-              setTimeout(() => { window.close(); }, 1200);
+              setTimeout(() => { window.close(); }, 1000);
             }
           </script>
         </div>
